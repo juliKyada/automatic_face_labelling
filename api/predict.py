@@ -4,7 +4,7 @@ import os
 import base64
 from tensorflow.keras.models import load_model
 import numpy as np
-from utils import preprocess_image, preprocess_for_ethnicity, preprocess_for_emotion
+from utils import preprocess_image, preprocess_for_ethnicity
 
 # Model paths - adjust based on your deployment
 MODEL_BASE_PATH = os.path.join(os.path.dirname(__file__), '..', 'labeling_age_gender')
@@ -12,7 +12,6 @@ MODEL_BASE_PATH = os.path.join(os.path.dirname(__file__), '..', 'labeling_age_ge
 # Global model cache
 _age_gender_model = None
 _ethnicity_model = None
-_emotion_model = None
 
 def get_age_gender_model():
     global _age_gender_model
@@ -50,21 +49,6 @@ def get_ethnicity_model():
     return _ethnicity_model
 
 def get_emotion_model():
-    global _emotion_model
-    if _emotion_model is None:
-        emotion_model_paths = [
-            os.path.join(MODEL_BASE_PATH, 'emotion_model.h5'),
-        ]
-        for emo_path in emotion_model_paths:
-            if os.path.exists(emo_path):
-                try:
-                    _emotion_model = load_model(emo_path, compile=False)
-                    break
-                except:
-                    continue
-    return _emotion_model
-
-class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             content_length = int(self.headers['Content-Length'])
@@ -129,47 +113,25 @@ class handler(BaseHTTPRequestHandler):
                         class_index = int(np.argmax(probs))
                         confidence = float(np.max(probs))
                         ethnicity_result = {
-                            'label': f"Class_{class_index}",
-                            'confidence': confidence
-                        }
-                except Exception as e:
-                    print(f"Ethnicity prediction error: {e}")
             
-            # Emotion model
-            emotion_model = get_emotion_model()
-            emotion_classes = ["Angry", "Disgust", "Fear", "Happy", "Sad", "Surprise", "Neutral"]
-            if emotion_model is not None:
+            # Ethnicity model
+            ethnicity_model = get_ethnicity_model()
+            if ethnicity_model is not None:
                 try:
-                    img_emo = preprocess_for_emotion(image_data)
-                    if img_emo is not None:
-                        probs = emotion_model.predict(img_emo, verbose=0)
+                    img_eth = preprocess_for_ethnicity(image_data)
+                    if img_eth is not None:
+                        probs = ethnicity_model.predict(img_eth, verbose=0)
                         probs = np.squeeze(probs)
                         if probs.ndim == 0:
                             probs = np.array([1.0 - float(probs), float(probs)])
                         class_index = int(np.argmax(probs))
                         confidence = float(np.max(probs))
-                        label = emotion_classes[class_index] if class_index < len(emotion_classes) else f"Emotion_{class_index}"
-                        emotion_result = {
-                            'label': label,
+                        ethnicity_result = {
+                            'label': f"Class_{class_index}",
                             'confidence': confidence
                         }
                 except Exception as e:
-                    print(f"Emotion prediction error: {e}")
-            
-            # Combine results
-            predictions = {
-                'age': age_value,
-                'gender': gender_label,
-                'gender_confidence': gender_confidence,
-                'ethnicity': ethnicity_result,
-                'emotion': emotion_result
-            }
-            
-            # Draw labels on image
-            from utils import draw_labels_on_image
-            labeled_image = draw_labels_on_image(image_data, predictions)
-            
-            response = {
+                    print(f"Ethnicity
                 'success': True,
                 'age': age_value,
                 'gender': gender_label,

@@ -51,37 +51,6 @@ def preprocess_for_ethnicity(image_bytes: bytes, target_size: Tuple[int, int] = 
         print(f"Error preprocessing for ethnicity: {str(e)}")
         return None
 
-def preprocess_for_emotion(image_bytes: bytes, target_size: Tuple[int, int] = (48, 48)) -> Optional[np.ndarray]:
-    """Preprocess image for emotion model input (grayscale)"""
-    try:
-        image = Image.open(io.BytesIO(image_bytes))
-        img_array = np.array(image)
-        
-        # Convert to grayscale
-        if len(img_array.shape) == 3:
-            if img_array.shape[2] == 4:
-                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2GRAY)
-            elif img_array.shape[2] == 3:
-                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        
-        # Resize
-        img_resized = cv2.resize(img_array, target_size)
-        
-        # Normalize
-        img_normalized = img_resized.astype('float32') / 255.0
-        
-        # Add channel dimension
-        if len(img_normalized.shape) == 2:
-            img_normalized = np.expand_dims(img_normalized, axis=-1)
-        
-        # Add batch dimension
-        img_batch = np.expand_dims(img_normalized, axis=0)
-        
-        return img_batch
-    except Exception as e:
-        print(f"Error preprocessing for emotion: {str(e)}")
-        return None
-
 def draw_labels_on_image(image_bytes: bytes, predictions: Dict) -> Optional[str]:
     """Draw prediction labels on the image and return as base64 string"""
     try:
