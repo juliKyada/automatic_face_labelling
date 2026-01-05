@@ -12,7 +12,7 @@
     }
   ],
   "functions": {
-    "api/predict.py": {
+    "api/*.py": {
       "maxDuration": 30
     }
   },
