@@ -15,7 +15,7 @@ import base64
 import glob
 from pathlib import Path
 from typing import Optional, Tuple
-from config import NATIONALITY_MODEL_PATHS, EMOTION_MODEL_PATHS, EMOTION_CLASSES
+from config import MODEL_PATH, ENABLE_FACE_DETECTION, FACE_DETECTION_SCALE_FACTOR, FACE_DETECTION_MIN_NEIGHBORS, FACE_DETECTION_MIN_SIZE
 
 # Page configuration
 st.set_page_config(
@@ -210,10 +210,6 @@ def upload_folder():
 class FacialLabellingSystem:
     def __init__(self):
         self.age_gender_model = None
-        self.nationality_model = None
-        self.emotion_model = None
-        self.nationality_model_path: Optional[str] = None
-        self.emotion_model_path: Optional[str] = None
         self.models_loaded = False
         self.dataset_info = {}
         self.labeled_data = []
@@ -224,7 +220,8 @@ class FacialLabellingSystem:
         """Load the pre-trained models"""
         try:
             with st.spinner("🔄 Loading models..."):
-                model_path = "age_gender_pseudolabel.h5"
+                # Use MODEL_PATH from config
+                model_path = os.path.abspath(MODEL_PATH)
                 if os.path.exists(model_path):
                     self.age_gender_model = load_model(model_path, compile=False)
                     self.age_gender_model.compile(
@@ -238,146 +235,85 @@ class FacialLabellingSystem:
                             "sex_out": "accuracy"
                         }
                     )
-                    # Try load nationality model (optional)
-                    self.nationality_model = self._try_load_nationality_model()
-                    
-                    # Try load emotion model (optional)
-                    self.emotion_model = self._try_load_emotion_model()
-                    
                     self.models_loaded = True
                     return True
                 else:
-                    st.error("❌ Model file 'age_gender_pseudolabel.h5' not found!")
+                    st.error(f"❌ Model file not found at: {model_path}")
+                    st.error(f"Please ensure the model file exists in the labeling_age_gender directory.")
                     return False
         except Exception as e:
             st.error(f"❌ Error loading models: {str(e)}")
             return False
 
-    def _try_load_nationality_model(self) -> Optional[object]:
-        # First check configured candidates
-        candidates = [os.path.abspath(p) for p in NATIONALITY_MODEL_PATHS]
-        # Add case-insensitive scans for root and models/
-        for root_dir in [os.getcwd(), os.path.join(os.getcwd(), 'models')]:
-            try:
-                for fname in os.listdir(root_dir):
-                    if fname.lower().endswith('.h5') and 'ethnicity' in fname.lower():
-                        candidates.append(os.path.join(root_dir, fname))
-            except Exception:
-                pass
-        # Deduplicate preserving order
-        seen = set()
-        unique_candidates = []
-        for c in candidates:
-            if c not in seen:
-                seen.add(c)
-                unique_candidates.append(c)
-        for candidate_path in unique_candidates:
-            try:
-                if os.path.exists(candidate_path):
-                    model = load_model(candidate_path, compile=False)
-                    self.nationality_model_path = candidate_path
-                    return model
-            except Exception as e:
-                st.warning(f"Failed loading ethnicity model at {os.path.basename(candidate_path)}: {e}")
-                continue
-        return None
-
-    def _try_load_emotion_model(self) -> Optional[object]:
-        """Try to load emotion model from configured paths."""
-        # First check configured candidates
-        candidates = [os.path.abspath(p) for p in EMOTION_MODEL_PATHS]
-        # Add case-insensitive scans for root and models/
-        for root_dir in [os.getcwd(), os.path.join(os.getcwd(), 'models')]:
-            try:
-                for fname in os.listdir(root_dir):
-                    if fname.lower().endswith('.h5') and 'emotion' in fname.lower():
-                        candidates.append(os.path.join(root_dir, fname))
-            except Exception:
-                pass
-        # Deduplicate preserving order
-        seen = set()
-        unique_candidates = []
-        for c in candidates:
-            if c not in seen:
-                seen.add(c)
-                unique_candidates.append(c)
-        for candidate_path in unique_candidates:
-            try:
-                if os.path.exists(candidate_path):
-                    model = load_model(candidate_path, compile=False)
-                    self.emotion_model_path = candidate_path
-                    return model
-            except Exception as e:
-                st.warning(f"Failed loading emotion model at {os.path.basename(candidate_path)}: {e}")
-                continue
-        return None
-
-    def load_nationality_model_from_path(self, model_path: str) -> bool:
-        try:
-            abs_path = os.path.abspath(model_path)
-            if not os.path.exists(abs_path):
-                st.error(f"❌ Ethnicity model not found at: {abs_path}")
-                return False
-            self.nationality_model = load_model(abs_path, compile=False)
-            self.nationality_model_path = abs_path
-            st.success(f"🌍 Ethnicity model loaded: {os.path.basename(abs_path)}")
-            return True
-        except Exception as e:
-            st.error(f"❌ Failed to load ethnicity model: {e}")
-            return False
-
-    def load_nationality_model_from_upload(self, uploaded_file) -> bool:
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                save_path = os.path.join(tmpdir, uploaded_file.name)
-                with open(save_path, 'wb') as f:
-                    f.write(uploaded_file.getbuffer())
-                # Load directly from temp path
-                self.nationality_model = load_model(save_path, compile=False)
-                self.nationality_model_path = uploaded_file.name
-                st.success(f"🌍 Ethnicity model loaded from upload: {uploaded_file.name}")
-                return True
-        except Exception as e:
-            st.error(f"❌ Failed to load uploaded ethnicity model: {e}")
-            return False
-
-    def load_emotion_model_from_path(self, model_path: str) -> bool:
-        try:
-            abs_path = os.path.abspath(model_path)
-            if not os.path.exists(abs_path):
-                st.error(f"❌ Emotion model not found at: {abs_path}")
-                return False
-            self.emotion_model = load_model(abs_path, compile=False)
-            self.emotion_model_path = abs_path
-            st.success(f"😊 Emotion model loaded: {os.path.basename(abs_path)}")
-            return True
-        except Exception as e:
-            st.error(f"❌ Failed to load emotion model: {e}")
-            return False
-
-    def load_emotion_model_from_upload(self, uploaded_file) -> bool:
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                save_path = os.path.join(tmpdir, uploaded_file.name)
-                with open(save_path, 'wb') as f:
-                    f.write(uploaded_file.getbuffer())
-                # Load directly from temp path
-                self.emotion_model = load_model(save_path, compile=False)
-                self.emotion_model_path = uploaded_file.name
-                st.success(f"😊 Emotion model loaded from upload: {uploaded_file.name}")
-                return True
-        except Exception as e:
-            st.error(f"❌ Failed to load uploaded emotion model: {e}")
-            return False
     
-    def preprocess_image(self, image, target_size=(48, 48)):
-        """Preprocess image for model input"""
+    def detect_and_crop_face(self, image_array):
+        """Detect face in image and crop it.
+        
+        Args:
+            image_array: numpy array of the image
+            
+        Returns:
+            Cropped face image array, or original image if no face detected
+        """
+        if not ENABLE_FACE_DETECTION:
+            return image_array
+            
+        try:
+            # Convert to grayscale for face detection
+            if len(image_array.shape) == 3:
+                gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = image_array
+            
+            # Load face cascade classifier
+            face_cascade = cv2.CascadeClassifier(
+                cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+            )
+            
+            # Detect faces
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=FACE_DETECTION_SCALE_FACTOR,
+                minNeighbors=FACE_DETECTION_MIN_NEIGHBORS,
+                minSize=FACE_DETECTION_MIN_SIZE
+            )
+            
+            if len(faces) > 0:
+                # Get the largest face
+                (x, y, w, h) = max(faces, key=lambda f: f[2] * f[3])
+                
+                # Add some padding to the face region
+                padding = int(0.1 * max(w, h))
+                x = max(0, x - padding)
+                y = max(0, y - padding)
+                w = min(image_array.shape[1] - x, w + 2 * padding)
+                h = min(image_array.shape[0] - y, h + 2 * padding)
+                
+                # Crop the face
+                face_crop = image_array[y:y+h, x:x+w]
+                return face_crop
+            else:
+                # No face detected, return original image
+                return image_array
+                
+        except Exception as e:
+            # If face detection fails, return original image
+            return image_array
+    
+    def preprocess_image(self, image, target_size=(128, 128)):
+        """Preprocess image for model input
+        
+        Includes automatic face detection and cropping if enabled.
+        """
         try:
             # Convert PIL image to numpy array
             if isinstance(image, Image.Image):
                 img_array = np.array(image)
             else:
                 img_array = image
+            
+            # Detect and crop face if enabled
+            img_array = self.detect_and_crop_face(img_array)
             
             # Resize to model input size
             img_resized = cv2.resize(img_array, target_size)
@@ -393,80 +329,6 @@ class FacialLabellingSystem:
             st.error(f"Error preprocessing image: {str(e)}")
             return None
 
-    def _preprocess_for_model(self, image, model, fallback_size=(224, 224)):
-        """Preprocess a PIL/numpy image for an arbitrary Keras model.
-
-        - If model has 4D input shape with known HxW, use that size.
-        - Otherwise, use fallback_size (defaults to 224x224 for common CNNs).
-        """
-        try:
-            input_shape = None
-            try:
-                input_shape = getattr(model, 'input_shape', None)
-            except Exception:
-                input_shape = None
-
-            if isinstance(image, Image.Image):
-                img_array = np.array(image)
-            else:
-                img_array = image
-
-            # Determine target size
-            target_size = fallback_size
-            if input_shape is not None:
-                # input_shape like (None, H, W, C) for TensorFlow
-                if isinstance(input_shape, (list, tuple)) and len(input_shape) >= 2:
-                    ishape = input_shape[0] if isinstance(input_shape[0], (list, tuple)) else input_shape
-                    if len(ishape) == 4:
-                        _, h, w, _ = ishape
-                        if isinstance(h, int) and isinstance(w, int) and h > 0 and w > 0:
-                            target_size = (w, h)
-
-            img_resized = cv2.resize(img_array, target_size)
-            img_normalized = img_resized.astype('float32') / 255.0
-            img_batch = np.expand_dims(img_normalized, axis=0)
-            return img_batch
-        except Exception as e:
-            st.error(f"Error preprocessing for model: {str(e)}")
-            return None
-
-    def _preprocess_for_emotion_model(self, image, target_size=(48, 48)):
-        """Preprocess image specifically for emotion model (grayscale).
-        
-        Most emotion recognition models expect grayscale images.
-        """
-        try:
-            # Convert PIL image to numpy array
-            if isinstance(image, Image.Image):
-                img_array = np.array(image)
-            else:
-                img_array = image
-            
-            # Convert to grayscale if it's RGB
-            if len(img_array.shape) == 3 and img_array.shape[2] == 3:
-                # Convert RGB to grayscale using standard weights
-                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-            elif len(img_array.shape) == 3 and img_array.shape[2] == 4:
-                # Convert RGBA to grayscale
-                img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2GRAY)
-            
-            # Resize to target size
-            img_resized = cv2.resize(img_array, target_size)
-            
-            # Normalize to [0,1]
-            img_normalized = img_resized.astype('float32') / 255.0
-            
-            # Add channel dimension for grayscale (H, W) -> (H, W, 1)
-            if len(img_normalized.shape) == 2:
-                img_normalized = np.expand_dims(img_normalized, axis=-1)
-            
-            # Add batch dimension (1, H, W, 1)
-            img_batch = np.expand_dims(img_normalized, axis=0)
-            
-            return img_batch
-        except Exception as e:
-            st.error(f"Error preprocessing image for emotion model: {str(e)}")
-            return None
     
     def predict_age_gender(self, image):
         """Predict age and gender from image"""
@@ -480,117 +342,40 @@ class FacialLabellingSystem:
             gender_pred, age_pred = self.age_gender_model.predict(img_input, verbose=0)
             
             # Process results
-            gender_prob = gender_pred[0][0]
+            gender_prob = float(gender_pred[0][0])
             gender_label = "Male" if gender_prob < 0.5 else "Female"
-            gender_confidence = max(gender_prob, 1 - gender_prob)
-            age_value = int(round(age_pred[0][0]))
+            gender_confidence = float(max(gender_prob, 1 - gender_prob))
+            age_value = int(round(float(age_pred[0][0])))
             
             return {
                 'age': age_value,
                 'gender': gender_label,
                 'gender_probability': gender_prob,
                 'gender_confidence': gender_confidence,
-                'raw_age': age_pred[0][0]
+                'raw_age': float(age_pred[0][0])
             }
         except Exception as e:
             st.error(f"Error during prediction: {str(e)}")
             return None
 
-    def predict_nationality(self, image) -> Optional[Tuple[str, float, np.ndarray]]:
-        """Predict nationality/ethnicity if model is available.
-
-        Returns (label, confidence, raw_probs) or None if model not loaded.
-        """
-        if self.nationality_model is None:
-            return None
-        try:
-            # Try to adapt input size for the ethnicity model (common CNNs use 224x224)
-            img_input = self._preprocess_for_model(image, self.nationality_model, fallback_size=(224, 224))
-            if img_input is None:
-                return None
-            probs = self.nationality_model.predict(img_input, verbose=0)
-            # Handle different output shapes
-            if isinstance(probs, list) or isinstance(probs, tuple):
-                probs = probs[0]
-            probs = np.squeeze(probs)
-            if probs.ndim == 0:
-                # Binary case; map to two classes
-                probs = np.array([1.0 - float(probs), float(probs)])
-            class_index = int(np.argmax(probs))
-            confidence = float(np.max(probs))
-            label = f"Class_{class_index}"
-            # Optional: human-readable labels via env or sidecar file in future
-            return label, confidence, probs
-        except Exception as e:
-            st.warning(f"Nationality prediction skipped: {str(e)}")
-            return None
-
-    def predict_emotion(self, image) -> Optional[Tuple[str, float, np.ndarray]]:
-        """Predict emotion if model is available.
-
-        Returns (label, confidence, raw_probs) or None if model not loaded.
-        """
-        if self.emotion_model is None:
-            return None
-        try:
-            # Preprocess image for emotion model (typically 48x48 grayscale for emotion models)
-            img_input = self._preprocess_for_emotion_model(image)
-            if img_input is None:
-                return None
-            probs = self.emotion_model.predict(img_input, verbose=0)
-            # Handle different output shapes
-            if isinstance(probs, list) or isinstance(probs, tuple):
-                probs = probs[0]
-            probs = np.squeeze(probs)
-            if probs.ndim == 0:
-                # Binary case; map to two classes
-                probs = np.array([1.0 - float(probs), float(probs)])
-            
-            class_index = int(np.argmax(probs))
-            confidence = float(np.max(probs))
-            
-            # Use predefined emotion classes if available, otherwise use generic labels
-            if class_index < len(EMOTION_CLASSES):
-                label = EMOTION_CLASSES[class_index]
-            else:
-                label = f"Emotion_{class_index}"
-            
-            return label, confidence, probs
-        except Exception as e:
-            st.warning(f"Emotion prediction skipped: {str(e)}")
-            return None
-
     def predict_all(self, image):
-        """Comprehensive prediction using all available models."""
+        """Prediction for age and gender"""
         try:
-            # Age and gender (required)
             age_gender_pred = self.predict_age_gender(image)
             if not age_gender_pred:
                 return None
-                
-            # Ethnicity (optional)
-            nationality_pred = self.predict_nationality(image)
-            
-            # Emotion (optional)
-            emotion_pred = self.predict_emotion(image)
             
             result = {
                 'age': age_gender_pred['age'],
                 'gender': age_gender_pred['gender'],
                 'gender_confidence': age_gender_pred['gender_confidence'],
-                'raw_gender_prob': age_gender_pred['gender_probability'],
-                'nationality': nationality_pred[0] if nationality_pred else None,
-                'nationality_confidence': nationality_pred[1] if nationality_pred else None,
-                'emotion': emotion_pred[0] if emotion_pred else None,
-                'emotion_confidence': emotion_pred[1] if emotion_pred else None,
-                'has_nationality': nationality_pred is not None,
-                'has_emotion': emotion_pred is not None
+                'raw_gender_prob': age_gender_pred['gender_probability']
             }
             
             return result
             
         except Exception as e:
-            st.error(f"Error during comprehensive prediction: {str(e)}")
+            st.error(f"Error during prediction: {str(e)}")
             return None
     
     def process_dataset(self, labeled_files, unlabeled_files):
@@ -625,8 +410,6 @@ class FacialLabellingSystem:
                             prediction = self.predict_age_gender(image)
                             
                             if prediction:
-                                nat = self.predict_nationality(image)
-                                emo = self.predict_emotion(image)
                                 result = {
                                     'filename': filename,
                                     'image_type': 'Labeled',
@@ -634,10 +417,6 @@ class FacialLabellingSystem:
                                     'true_gender': gender_label,
                                     'predicted_age': prediction['age'],
                                     'predicted_gender': prediction['gender'],
-                                    'predicted_nationality': nat[0] if nat else None,
-                                    'nationality_confidence': nat[1] if nat else None,
-                                    'predicted_emotion': emo[0] if emo else None,
-                                    'emotion_confidence': emo[1] if emo else None,
                                     'age_error': abs(true_age - prediction['age']),
                                     'gender_correct': (true_gender == 0 and prediction['gender'] == 'Male') or 
                                                     (true_gender == 1 and prediction['gender'] == 'Female'),
@@ -679,8 +458,6 @@ class FacialLabellingSystem:
                     prediction = self.predict_age_gender(image)
                     
                     if prediction:
-                        nat = self.predict_nationality(image)
-                        emo = self.predict_emotion(image)
                         result = {
                             'filename': filename,
                             'image_type': 'Unlabeled',
@@ -688,10 +465,6 @@ class FacialLabellingSystem:
                             'true_gender': None,
                             'predicted_age': prediction['age'],
                             'predicted_gender': prediction['gender'],
-                            'predicted_nationality': nat[0] if nat else None,
-                            'nationality_confidence': nat[1] if nat else None,
-                            'predicted_emotion': emo[0] if emo else None,
-                            'emotion_confidence': emo[1] if emo else None,
                             'age_error': None,
                             'gender_correct': None,
                             'gender_confidence': prediction['gender_confidence'],
@@ -1086,30 +859,6 @@ def show_processing_summary(results):
         st.metric("Avg Confidence", f"{avg_confidence:.1f}%")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Ethnicity quick view (if available)
-    if 'predicted_nationality' in df.columns and df['predicted_nationality'].notna().any():
-        st.markdown("### 🌍 Ethnicity Overview")
-        eth_counts = df['predicted_nationality'].fillna('Unknown').value_counts()
-        fig_eth = px.bar(
-            x=eth_counts.index,
-            y=eth_counts.values,
-            labels={'x': 'Ethnicity', 'y': 'Count'},
-            title="Predicted Ethnicity Distribution"
-        )
-        st.plotly_chart(fig_eth, use_container_width=True)
-    
-    # Emotion quick view (if available)
-    if 'predicted_emotion' in df.columns and df['predicted_emotion'].notna().any():
-        st.markdown("### 😊 Emotion Overview")
-        emo_counts = df['predicted_emotion'].fillna('Unknown').value_counts()
-        fig_emo = px.bar(
-            x=emo_counts.index,
-            y=emo_counts.values,
-            labels={'x': 'Emotion', 'y': 'Count'},
-            title="Predicted Emotion Distribution"
-        )
-        st.plotly_chart(fig_emo, use_container_width=True)
-    
     # Show detailed results table
     st.markdown("### 📋 Detailed Results")
     
@@ -1121,22 +870,6 @@ def show_processing_summary(results):
     
     with col2:
         filter_type = st.selectbox("📁 Filter by type:", ["All", "Labeled", "Unlabeled"])
-    # Additional filters in columns
-    col3, col4 = st.columns(2)
-    
-    with col3:
-        # Ethnicity filter
-        eth_options = ["All"]
-        if 'predicted_nationality' in df.columns and df['predicted_nationality'].notna().any():
-            eth_options += sorted(df['predicted_nationality'].dropna().unique().tolist())
-        ethnicity_filter = st.selectbox("🌍 Filter by ethnicity:", eth_options)
-    
-    with col4:
-        # Emotion filter
-        emo_options = ["All"]
-        if 'predicted_emotion' in df.columns and df['predicted_emotion'].notna().any():
-            emo_options += sorted(df['predicted_emotion'].dropna().unique().tolist())
-        emotion_filter = st.selectbox("😊 Filter by emotion:", emo_options)
     
     # Filter data
     filtered_df = df.copy()
@@ -1144,10 +877,6 @@ def show_processing_summary(results):
         filtered_df = filtered_df[filtered_df['filename'].str.contains(search_term, case=False, na=False)]
     if filter_type != "All":
         filtered_df = filtered_df[filtered_df['image_type'] == filter_type]
-    if 'predicted_nationality' in filtered_df.columns and ethnicity_filter != "All":
-        filtered_df = filtered_df[filtered_df['predicted_nationality'] == ethnicity_filter]
-    if 'predicted_emotion' in filtered_df.columns and emotion_filter != "All":
-        filtered_df = filtered_df[filtered_df['predicted_emotion'] == emotion_filter]
     
     # Display filtered results
     st.dataframe(filtered_df, use_container_width=True)
@@ -1198,36 +927,6 @@ def show_results_page(facial_system):
         )
         fig_gender.update_layout(height=400)
         st.plotly_chart(fig_gender, use_container_width=True)
-    
-    # Ethnicity and Emotion distributions side by side
-    col1, col2 = st.columns(2)
-    
-    # Ethnicity distribution if available
-    if 'predicted_nationality' in df.columns and df['predicted_nationality'].notna().any():
-        with col1:
-            st.markdown("### 🌍 Ethnicity Distribution")
-            eth_counts = df['predicted_nationality'].fillna('Unknown').value_counts()
-            fig_eth_bar = px.bar(
-                x=eth_counts.index,
-                y=eth_counts.values,
-                labels={'x': 'Ethnicity', 'y': 'Count'},
-                title="Ethnicity Counts"
-            )
-            st.plotly_chart(fig_eth_bar, use_container_width=True)
-    
-    # Emotion distribution if available
-    if 'predicted_emotion' in df.columns and df['predicted_emotion'].notna().any():
-        with col2:
-            st.markdown("### 😊 Emotion Distribution")
-            emo_counts = df['predicted_emotion'].fillna('Unknown').value_counts()
-            fig_emo_bar = px.bar(
-                x=emo_counts.index,
-                y=emo_counts.values,
-                labels={'x': 'Emotion', 'y': 'Count'},
-                title="Emotion Counts",
-                color_discrete_sequence=px.colors.qualitative.Set2
-            )
-            st.plotly_chart(fig_emo_bar, use_container_width=True)
     
     # Performance metrics for labeled data
     labeled_df = df[df['image_type'] == 'Labeled']
@@ -1320,20 +1019,6 @@ def show_download_page(facial_system):
         search_term = st.text_input("🔍 Search:", placeholder="Search by filename...")
     with col2:
         filter_type = st.selectbox("📁 Filter:", ["All", "Labeled", "Unlabeled"])
-    col3, col4 = st.columns(2)
-    with col3:
-        # Ethnicity filter for export preview
-        eth_options = ["All"]
-        if 'predicted_nationality' in df.columns and df['predicted_nationality'].notna().any():
-            eth_options += sorted(df['predicted_nationality'].dropna().unique().tolist())
-        ethnicity_filter = st.selectbox("🌍 Ethnicity:", eth_options)
-    
-    with col4:
-        # Emotion filter for export preview
-        emo_options = ["All"]
-        if 'predicted_emotion' in df.columns and df['predicted_emotion'].notna().any():
-            emo_options += sorted(df['predicted_emotion'].dropna().unique().tolist())
-        emotion_filter = st.selectbox("😊 Emotion:", emo_options)
     
     # Filter data
     filtered_df = df.copy()
@@ -1341,10 +1026,6 @@ def show_download_page(facial_system):
         filtered_df = filtered_df[filtered_df['filename'].str.contains(search_term, case=False, na=False)]
     if filter_type != "All":
         filtered_df = filtered_df[filtered_df['image_type'] == filter_type]
-    if 'predicted_nationality' in filtered_df.columns and ethnicity_filter != "All":
-        filtered_df = filtered_df[filtered_df['predicted_nationality'] == ethnicity_filter]
-    if 'predicted_emotion' in filtered_df.columns and emotion_filter != "All":
-        filtered_df = filtered_df[filtered_df['predicted_emotion'] == emotion_filter]
     
     st.dataframe(filtered_df.head(10), use_container_width=True)
     st.markdown(f"**Showing {len(filtered_df)} of {len(df)} results**")
@@ -1374,14 +1055,13 @@ def show_download_page(facial_system):
             
             # Create summary sheet
             summary_data = {
-                'Metric': ['Total Images', 'Labeled Images', 'Unlabeled Images', 'Age MAE', 'Gender Accuracy', 'Classes (Eth/Emo)'],
+                'Metric': ['Total Images', 'Labeled Images', 'Unlabeled Images', 'Age MAE', 'Gender Accuracy'],
                 'Value': [
                     len(filtered_df),
                     len(filtered_df[filtered_df['image_type'] == 'Labeled']),
                     len(filtered_df[filtered_df['image_type'] == 'Unlabeled']),
                     filtered_df[filtered_df['image_type'] == 'Labeled']['age_error'].mean() if len(filtered_df[filtered_df['image_type'] == 'Labeled']) > 0 else 'N/A',
-                    f"{filtered_df[filtered_df['image_type'] == 'Labeled']['gender_correct'].mean() * 100:.1f}%" if len(filtered_df[filtered_df['image_type'] == 'Labeled']) > 0 else 'N/A',
-                    f"Eth:{len(filtered_df['predicted_nationality'].dropna().unique()) if 'predicted_nationality' in filtered_df.columns else 0}, Emo:{len(filtered_df['predicted_emotion'].dropna().unique()) if 'predicted_emotion' in filtered_df.columns else 0}"
+                    f"{filtered_df[filtered_df['image_type'] == 'Labeled']['gender_correct'].mean() * 100:.1f}%" if len(filtered_df[filtered_df['image_type'] == 'Labeled']) > 0 else 'N/A'
                 ]
             }
             summary_df = pd.DataFrame(summary_data)
@@ -1463,41 +1143,6 @@ def show_download_page(facial_system):
                 use_container_width=True
             )
 
-    # Export by ethnicity and emotion (if present)
-    col_export1, col_export2 = st.columns(2)
-    
-    if 'predicted_nationality' in df.columns and df['predicted_nationality'].notna().any():
-        with col_export1:
-            st.markdown("### 🌍 Export by Ethnicity")
-            eth_choices = sorted(df['predicted_nationality'].dropna().unique().tolist())
-            chosen_eth = st.selectbox("Choose ethnicity:", eth_choices, key="export_ethnicity")
-            eth_df = df[df['predicted_nationality'] == chosen_eth]
-            if st.button(f"📥 Export {chosen_eth} Results", use_container_width=True):
-                csv_data = eth_df.to_csv(index=False)
-                st.download_button(
-                    label=f"Download {chosen_eth} CSV",
-                    data=csv_data,
-                    file_name=f"facial_labelling_ethnicity_{chosen_eth}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-    
-    if 'predicted_emotion' in df.columns and df['predicted_emotion'].notna().any():
-        with col_export2:
-            st.markdown("### 😊 Export by Emotion")
-            emo_choices = sorted(df['predicted_emotion'].dropna().unique().tolist())
-            chosen_emo = st.selectbox("Choose emotion:", emo_choices, key="export_emotion")
-            emo_df = df[df['predicted_emotion'] == chosen_emo]
-            if st.button(f"📥 Export {chosen_emo} Results", use_container_width=True):
-                csv_data = emo_df.to_csv(index=False)
-                st.download_button(
-                    label=f"Download {chosen_emo} CSV",
-                    data=csv_data,
-                    file_name=f"facial_labelling_emotion_{chosen_emo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-
 def main():
     # Initialize the system
     if 'facial_system' not in st.session_state:
@@ -1514,55 +1159,15 @@ def main():
         page = st.selectbox(
             "Choose a page:",
     
-            ["🏠 Home", "🙍‍♀️ Single Image",  "📁 Load Dataset", "🔍 Process Images", "📊 Results", "📥 Download"]
+            ["🏠 Home", "🙍‍♀️ Single Image",  "📁 Load Dataset", "🔍 Process Images", "📊 Results", "📥 Download", "ℹ️ About"]
         )
         
         st.markdown("---")
         st.markdown("## ℹ️ System Status")
         if facial_system.models_loaded:
-            st.success("✅ Models Loaded")
-            
-            # Ethnicity model status
-            if facial_system.nationality_model is not None:
-                loaded_name = os.path.basename(facial_system.nationality_model_path) if facial_system.nationality_model_path else ""
-                st.info(f"🌍 Ethnicity model loaded {f'({loaded_name})' if loaded_name else ''}")
-            else:
-                st.warning("🌍 Ethnicity model not found (optional)")
-                # Manual loader
-                st.markdown("#### Load Ethnicity Model")
-                eth_upload = st.file_uploader("Upload .h5 file", type=['h5'], key="eth_model_upload")
-                eth_path = st.text_input("Or enter path to .h5", value="ethnicity_labelling.h5")
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button("Load from upload") and eth_upload is not None:
-                        facial_system.load_nationality_model_from_upload(eth_upload)
-                        st.rerun()
-                with col_b:
-                    if st.button("Load from path") and eth_path:
-                        if facial_system.load_nationality_model_from_path(eth_path):
-                            st.rerun()
-            
-            # Emotion model status
-            if facial_system.emotion_model is not None:
-                loaded_name = os.path.basename(facial_system.emotion_model_path) if facial_system.emotion_model_path else ""
-                st.info(f"😊 Emotion model loaded {f'({loaded_name})' if loaded_name else ''}")
-            else:
-                st.warning("😊 Emotion model not found (optional)")
-                # Manual loader
-                st.markdown("#### Load Emotion Model")
-                emo_upload = st.file_uploader("Upload emotion .h5 file", type=['h5'], key="emo_model_upload")
-                emo_path = st.text_input("Or enter path to emotion .h5", value="emotion_model.h5")
-                col_c, col_d = st.columns(2)
-                with col_c:
-                    if st.button("Load emotion from upload") and emo_upload is not None:
-                        facial_system.load_emotion_model_from_upload(emo_upload)
-                        st.rerun()
-                with col_d:
-                    if st.button("Load emotion from path") and emo_path:
-                        if facial_system.load_emotion_model_from_path(emo_path):
-                            st.rerun()
+            st.success("✅ Age/Gender Model Loaded")
         else:
-            st.error("❌ Models Not Loaded")
+            st.error("❌ Model Not Loaded")
         
         st.markdown("---")
         st.markdown("## 📊 Dataset Info")
@@ -1595,6 +1200,8 @@ def main():
         show_results_page(facial_system)
     elif page == "📥 Download":
         show_download_page(facial_system)
+    elif page == "ℹ️ About":
+        show_about_page()
 
 def show_single_image_page(facial_system):
     """Display the single image analysis page"""
@@ -1643,25 +1250,8 @@ def show_single_image_page(facial_system):
                         
                         # Gender confidence
                         st.markdown("**Gender Confidence:**")
-                        st.progress(prediction['gender_confidence'])
-                        st.text(f"{prediction['gender_confidence']:.1%}")
-                        
-                        # Optional predictions
-                        if prediction['has_nationality']:
-                            st.markdown("##### 🌍 Ethnicity Analysis")
-                            col_c, col_d = st.columns(2)
-                            with col_c:
-                                st.metric("Predicted Ethnicity", prediction['nationality'])
-                            with col_d:
-                                st.metric("Confidence", f"{prediction['nationality_confidence']:.1%}")
-                        
-                        if prediction['has_emotion']:
-                            st.markdown("##### 😊 Emotion Analysis")
-                            col_e, col_f = st.columns(2)
-                            with col_e:
-                                st.metric("Predicted Emotion", prediction['emotion'])
-                            with col_f:
-                                st.metric("Confidence", f"{prediction['emotion_confidence']:.1%}")
+                        st.progress(float(prediction['gender_confidence']))
+                        st.text(f"{float(prediction['gender_confidence']):.1%}")
                         
                         # Download individual result
                         st.markdown("##### 📥 Export Result")
@@ -1670,10 +1260,6 @@ def show_single_image_page(facial_system):
                             'predicted_age': prediction['age'],
                             'predicted_gender': prediction['gender'],
                             'gender_confidence': prediction['gender_confidence'],
-                            'predicted_nationality': prediction['nationality'],
-                            'nationality_confidence': prediction['nationality_confidence'],
-                            'predicted_emotion': prediction['emotion'],
-                            'emotion_confidence': prediction['emotion_confidence'],
                             'analysis_timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         }
                         
@@ -1696,115 +1282,201 @@ def show_single_image_page(facial_system):
         # Show example of what the system can detect
         st.markdown("### 🎯 What This System Can Detect")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("""
-            **👤 Demographics:**
+            **👤 Age Prediction:**
             - Age (0-100 years)
-            - Gender (Male/Female)
-            - Confidence scores
+            - Regression-based estimation
+            - Continuous value output
             """)
         
         with col2:
-            if facial_system.nationality_model:
-                st.markdown("""
-                **🌍 Ethnicity:**
-                - Multi-class classification
-                - Confidence scoring
-                - Various ethnic groups
-                """)
-            else:
-                st.markdown("""
-                **🌍 Ethnicity:**
-                - Not available
-                - (Load ethnicity model)
-                """)
-        
-        with col3:
-            if facial_system.emotion_model:
-                st.markdown(f"""
-                **😊 Emotions:**
-                - {', '.join(EMOTION_CLASSES[:3])}
-                - {', '.join(EMOTION_CLASSES[3:])}
-                - Confidence scoring
-                """)
-            else:
-                st.markdown("""
-                **😊 Emotions:**
-                - Not available
-                - (Load emotion model)
-                """)
+            st.markdown("""
+            **⚧️ Gender Classification:**
+            - Binary classification (Male/Female)
+            - Confidence scoring
+            - Probability estimates
+            """)
 
 def show_home_page():
-    """Display the home page"""
-    st.markdown('<h2 class="sub-header">Welcome to the Automatic Facial Image Labelling System</h2>', unsafe_allow_html=True)
+    """Display the home page - Clean and user-friendly"""
+    st.markdown('<h2 class="sub-header">Welcome to Automatic Facial Image Labelling</h2>', unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
+    st.markdown("""
+    Automatically label facial images with **Age** and **Gender** predictions using advanced deep learning.
+    """)
     
+    st.markdown("---")
+    
+    # Step-by-step guide
+    st.markdown('<h3 class="sub-header">📋 How to Use</h3>', unsafe_allow_html=True)
+    
+    # Step 1
+    st.markdown("### Step 1️⃣ Initialize System")
+    st.markdown("""
+    Click the **Load Models** button in the sidebar to prepare the system. This loads the deep learning models needed for image analysis.
+    """)
+    st.info("⚠️ Models must be loaded before processing any images")
+    
+    # Step 2
+    st.markdown("### Step 2️⃣ Choose Your Task")
+    col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        This system uses advanced deep learning models to automatically label facial images with comprehensive predictions.
-        
-        ### 🎯 Key Features:
-        - **Multi-label Prediction**: Age, Gender, Ethnicity, and Emotion classification
-        - **Age Prediction**: Regression-based age estimation (0-100 years)
-        - **Gender Classification**: Binary classification (Male/Female) with confidence scores
-        - **Ethnicity Recognition**: Multi-class ethnicity classification
-        - **Emotion Detection**: Facial emotion recognition (Happy, Sad, Angry, etc.)
-        - **Batch Processing**: Handle large datasets efficiently
-        - **Results Export**: Download labeled datasets in various formats
-        
-        ### 🔬 How It Works:
-        1. **Load Models**: Age/Gender + Optional Ethnicity + Optional Emotion models
-        2. **Upload Dataset**: Labeled and unlabeled facial images
-        3. **Process Images**: Apply all available models for comprehensive predictions
-        4. **Generate Labels**: Create multi-dimensional labeled dataset
-        5. **Export Results**: Download results with all predictions in CSV/Excel format
+        **Option A: Single Image**
+        - Go to 🙍‍♀️ Single Image
+        - Upload one image to get instant predictions
+        - Perfect for quick testing
         """)
-    
     with col2:
         st.markdown("""
-        ### 📈 Performance Metrics:
-        - **Age Prediction**: Mean Absolute Error (MAE)
-        - **Gender Classification**: Accuracy and Confidence
-        - **Ethnicity Recognition**: Multi-class accuracy (if model loaded)
-        - **Emotion Detection**: Emotion class confidence (if model loaded)
-        - **Comprehensive Analysis**: Cross-validation and confidence scores
-        
-        ### 🛠️ Technical Details:
-        - **Input Size**: 48x48 pixels (RGB)
-        - **Model Architecture**: CNN with dual outputs
-        - **Preprocessing**: Resize, normalize, batch processing
+        **Option B: Batch Processing**
+        - Go to 📁 Load Dataset
+        - Upload multiple images at once
+        - Perfect for labeling large collections
+        """)
+    
+    # Step 3
+    st.markdown("### Step 3️⃣ Process & View Results")
+    st.markdown("""
+    - System automatically analyzes all images
+    - View predictions (Age and Gender)
+    - Check confidence scores for each prediction
+    """)
+    
+    # Step 4
+    st.markdown("### Step 4️⃣ Download Results")
+    st.markdown("""
+    - Go to 📥 Download
+    - Export labeled data in CSV or Excel format
+    - Ready to use for your projects
+    """)
+    
+    st.markdown("---")
+    
+    # What it does
+    st.markdown('<h3 class="sub-header">✨ What We Predict</h3>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        ### 👤 Age
+        Estimated age in years
+        (0-100 years)
+        """)
+    with col2:
+        st.markdown("""
+        ### 👫 Gender
+        Male or Female
+        with confidence score
         """)
     
     st.markdown("---")
     
-    # Quick start section
-    st.markdown('<h3 class="sub-header">🚀 Quick Start</h3>', unsafe_allow_html=True)
+    # Tips
+    st.markdown('<h3 class="sub-header">💡 Tips for Best Results</h3>', unsafe_allow_html=True)
+    st.markdown("""
+    - **Good Lighting**: Clear, well-lit facial images work best
+    - **Face Visibility**: Make sure faces are clearly visible
+    - **Image Quality**: Higher resolution images give better results
+    - **Multiple Images**: Batch processing is faster for large datasets
     
-    col1, col2, col3 = st.columns(3)
+    ---
+    **Want to know more?** Check the ℹ️ **About** page for technical details!
+    """)
+
+def show_about_page():
+    """Display the about/info page with technical details"""
+    st.markdown('<h2 class="sub-header">About This System</h2>', unsafe_allow_html=True)
     
-    with col1:
-        st.markdown("""
-        **Step 1: Load Models**
-        - Click 'Load Models' button
-        - Ensure model file is present
-        """)
+    st.markdown("""
+    ## 🎯 Overview
     
-    with col2:
-        st.markdown("""
-        **Step 2: Upload Dataset**
-        - Go to 'Load Dataset' page
-        - Upload labeled and unlabeled images
-        """)
+    The Automatic Facial Image Labelling System uses state-of-the-art deep learning models 
+    to automatically identify and classify facial age and gender from images.
     
-    with col3:
-        st.markdown("""
-        **Step 3: Process & Export**
-        - Process images automatically
-        - Download labeled results
-        """)
+    ---
+    
+    ## 📊 Predictions Available
+    
+    **Age Prediction**
+    - Regression-based estimation (0-100 years)
+    - Mean Absolute Error (MAE) based accuracy
+    
+    **Gender Classification**
+    - Binary classification (Male / Female)
+    - Confidence scores for each prediction
+    
+    ---
+    
+    ## 🔬 Technical Details
+    
+    ### Model Architecture
+    - **Age/Gender Model**: MobileNetV2 with dual output heads
+    - **Input Size**: 128×128 pixels (RGB)
+    - **Preprocessing**: Automatic face detection and cropping
+    - **Normalization**: Image normalization and resizing
+    - **Batch Processing**: Efficient multi-image processing
+    
+    ### Processing Pipeline
+    1. Image loading and validation
+    2. Automatic face detection using Haar Cascade
+    3. Face region cropping and preprocessing
+    4. Model inference with confidence scores
+    5. Results aggregation and export
+    
+    ### File Formats
+    - **Input**: JPG, PNG, BMP, TIFF
+    - **Output**: CSV, Excel formats with predictions
+    
+    ---
+    
+    ## 🛠️ Features
+    
+    ✅ Single image analysis for quick testing  
+    ✅ Batch processing for large datasets  
+    ✅ Automatic face detection and cropping  
+    ✅ Confidence scores for all predictions  
+    ✅ Export results in CSV/Excel formats  
+    ✅ Dataset statistics and visualization  
+    
+    ---
+    
+    ## 📈 Performance Metrics
+    
+    The system provides:
+    - **Age accuracy** via Mean Absolute Error (MAE)
+    - **Gender accuracy** with confidence percentages
+    - **Processing statistics** (time, batch size, etc.)
+    - **Dataset summaries** and error analysis
+    
+    ---
+    
+    ## 🔧 Configuration
+    
+    ### Model Setup
+    The system automatically loads the trained model from:
+    - `labeling_age_gender/Age_Gender_MobileNetV2.h5`
+    - Detection parameter customization available in config.py
+    
+    ### Face Detection Settings
+    - Scale Factor: 1.1
+    - Min Neighbors: 5
+    - Min Face Size: 30×30 pixels
+    - Automatic padding around detected faces
+    
+    ### Requirements
+    - TensorFlow/Keras for deep learning
+    - OpenCV for image processing
+    - Streamlit for the web interface
+    - Pandas/Openpyxl for data export
+    
+    ---
+    
+    **Need help?** Check the Home page for step-by-step instructions!
+    """)
 
 if __name__ == "__main__":
     main()

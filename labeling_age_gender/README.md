@@ -30,7 +30,7 @@ A professional GUI application for automatic age and gender prediction from faci
 ```
 labeling_age_gender/
 ├── facial_labelling_gui.py    # Main GUI application
-├── age_gender_pseudolabel.h5  # Pre-trained age/gender model
+├── age_gender_mobilenetv2.h5  # Pre-trained age/gender model
 ├── requirements.txt            # Python dependencies
 ├── README.md                  # This file
 └── Automatic_image_labelling.ipynb  # Original training notebook
@@ -96,7 +96,7 @@ The system uses a small amount of manually labelled data combined with predictio
 ### Common Issues
 
 1. **Models not loading**
-   - Ensure `age_gender_pseudolabel.h5` is in the same directory
+   - Ensure `age_gender_mobilenetv2.h5` is in the same directory
    - Check TensorFlow installation and version compatibility
 
 2. **Memory errors during batch processing**
@@ -136,4 +136,4 @@ For technical support or questions, please refer to the original training notebo
 
 ---
 
-**Note**: This application requires the pre-trained model file (`age_gender_pseudolabel.h5`) to function. Ensure the model file is present in the project directory before running the GUI.
+**Note**: This application requires the pre-trained model file (`age_gender_mobilenetv2.h5`) to function. Ensure the model file is present in the project directory before running the GUI.

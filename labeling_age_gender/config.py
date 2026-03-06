@@ -10,41 +10,24 @@ BUTTON_COLOR = "#3498db"
 STATUS_BACKGROUND = "#ecf0f1"
 
 # Model Settings
-MODEL_PATH = "age_gender_pseudolabel.h5"
-# Optional additional models (loaded if present)
-NATIONALITY_MODEL_PATHS = [
-    "models/nationality_model.h5",
-    "models/ethnicity_model.h5",
-    "ethnicity_labelling.h5",
-    "Ethnicity_lebelling.h5",
-    "models/Ethnicity_lebelling.h5",
-    "nationality_model.h5",
-    "ethnicity_model.h5"
-]
-# Emotion model paths
-EMOTION_MODEL_PATHS = [
-    "emotion_model.h5",
-    "models/emotion_model.h5",
-    "emotion_recognition_model.h5",
-    "emotion_classifier.h5"
-]
-MODEL_INPUT_SIZE = (48, 48)  # Width, Height
-MODEL_BATCH_SIZE = 1
+# Get the directory where this config file is located
+import os
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Emotion classes (common emotion labels)
-EMOTION_CLASSES = [
-    "Angry",
-    "Disgust", 
-    "Fear",
-    "Happy",
-    "Sad",
-    "Surprise",
-    "Neutral"
-]
+MODEL_PATH = os.path.join(_BASE_DIR, "Age_Gender_MobileNetV2.h5")
+
+# Face Detection Settings
+ENABLE_FACE_DETECTION = True  # Enable automatic face detection and cropping
 
 # Image Settings
 SUPPORTED_FORMATS = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
 DISPLAY_SIZE = (400, 400)  # Max display size for images
+
+# Face Detection Settings
+ENABLE_FACE_DETECTION = True  # Enable automatic face detection and cropping
+FACE_DETECTION_SCALE_FACTOR = 1.1
+FACE_DETECTION_MIN_NEIGHBORS = 5
+FACE_DETECTION_MIN_SIZE = (30, 30)  # Minimum face size to detect
 IMAGE_QUALITY = 95  # JPEG quality for saving
 
 # Processing Settings
@@ -95,7 +78,7 @@ How to use the system:
 """
 
 # Error Messages
-ERROR_MODEL_NOT_FOUND = "Model file not found. Please ensure 'age_gender_pseudolabel.h5' is in the current directory."
+ERROR_MODEL_NOT_FOUND = "Model file not found. Please ensure 'age_gender_mobilenetv2.h5' is in the current directory."
 ERROR_IMAGE_LOAD = "Failed to load image. Please check file format and integrity."
 ERROR_PREDICTION = "Prediction failed. Please try again or check the image."
 ERROR_BATCH_PROCESS = "Batch processing failed. Please check the folder and try again."

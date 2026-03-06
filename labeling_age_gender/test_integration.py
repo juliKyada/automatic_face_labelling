@@ -56,8 +56,8 @@ def test_prediction_functions():
         print("❌ Cannot test predictions - models failed to load")
         return False
     
-    # Create a dummy image (48x48 RGB)
-    dummy_image = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
+    # Create a dummy image (128x128 RGB)
+    dummy_image = np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8)
     pil_image = Image.fromarray(dummy_image)
     
     try:
@@ -101,8 +101,8 @@ def test_comprehensive_prediction():
         print("❌ Cannot test comprehensive prediction - models failed to load")
         return False
     
-    # Create a dummy image
-    dummy_image = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
+    # Create a dummy image (128x128 RGB)
+    dummy_image = np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8)
     pil_image = Image.fromarray(dummy_image)
     
     try:

@@ -45,8 +45,9 @@ def main():
     print("=" * 60)
     
     # Check if model file exists
-    if not os.path.exists("age_gender_pseudolabel.h5"):
-        print("❌ Error: Model file 'age_gender_pseudolabel.h5' not found!")
+    model_file = "Age_Gender_MobileNetV2.h5"
+    if not os.path.exists(model_file):
+        print(f"❌ Error: Model file '{model_file}' not found!")
         print("Please ensure the model file is in the current directory.")
         input("Press Enter to exit...")
         return

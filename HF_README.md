@@ -21,7 +21,7 @@ A Streamlit-based application for automatic facial attribute detection including
 
 ## Model Information
 
-- **Age/Gender Model**: `age_gender_pseudolabel.h5`
+- **Age/Gender Model**: `age_gender_mobilenetv2.h5`
 - **Ethnicity Model**: `Ethnicity_lebelling.h5`
 
 ## How to Use
@@ -54,7 +54,7 @@ This app is deployed on Hugging Face Spaces using Streamlit. The app automatical
 ├── labeling_age_gender/
 │   ├── streamlit_gui.py         # Main Streamlit app
 │   ├── config.py                # Configuration
-│   ├── age_gender_pseudolabel.h5    # Age/Gender model
+│   ├── age_gender_mobilenetv2.h5    # Age/Gender model
 │   ├── Ethnicity_lebelling.h5       # Ethnicity model
 │   └── ...
 ├── app.py                       # Entry point for HF Spaces
